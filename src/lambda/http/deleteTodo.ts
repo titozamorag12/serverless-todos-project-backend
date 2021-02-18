@@ -1,10 +1,23 @@
-import 'source-map-support/register'
+import "source-map-support/register";
+import { deleteTodoItem } from "../../businessLogic/todos";
 
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyHandler } from 'aws-lambda'
+import * as express from "express";
+import * as awsServerlessExpress from "aws-serverless-express";
 
-export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  const todoId = event.pathParameters.todoId
+const app = express();
 
-  // TODO: Remove a TODO item by id
-  return undefined
-}
+app.delete("/todos/:todoId", async (_req, res) => {
+  const todoId = _req.params.todoId;
+  await deleteTodoItem(todoId);
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Rquested-With, Content-Type, Accept"
+  );
+  res.status(200).send();
+});
+
+const server = awsServerlessExpress.createServer(app);
+exports.handler = (event, context) => {
+  awsServerlessExpress.proxy(server, event, context);
+};
