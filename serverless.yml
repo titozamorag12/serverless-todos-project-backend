@@ -10,7 +10,7 @@ provider:
   name: aws
   runtime: nodejs12.x
 
-  stage: ${opt:stage, 'qa'}
+  stage: ${opt:stage, 'new'}
   region: ${opt:region, 'us-east-2'}
 
   environment:
@@ -27,12 +27,14 @@ provider:
       Action:
         - dynamodb:Scan
         - dynamodb:PutItem
+        - dynamodb:UpdateItem
         - dynamodb:DeleteItem
         - dynamodb:GetItem
       Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
     - Effect: Allow
       Action:
         - dynamodb:PutItem
+        - dynamodb:UpdateItem
         - dynamodb:DeleteItem
         - dynamodb:Query
       Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}
@@ -56,6 +58,19 @@ provider:
 
 custom:
   topicName: imagesTopic-${self:provider.stage}
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: Project 4
+        description: Serverless application for Todos app
+    models:
+      - name: CreateTodoRequest
+        contentType: application/json
+        schema: ${file(models/create-todo-request.json)}
+      - name: UpdateTodoRequest
+        contentType: application/json
+        schema: ${file(models/update-todo-request.json)}
 
 functions:
   RS256Auth:
@@ -83,7 +98,7 @@ functions:
             summary: Create a new todo
             description: Create a new todo
             requestModels:
-              "application/json": TodoRequest
+              "application/json": CreateTodoRequest
 
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
@@ -94,21 +109,29 @@ functions:
           cors: true
           authorizer: RS256Auth
 
-  # TODO: Configure this function
-  # UpdateTodo:
-  #   handler: src/lambda/http/updateTodo.handler
-  #   events:
-  #     - http:
-  #         method: patch
-  #         path: todos/{todoId}
+  UpdateTodo:
+    handler: src/lambda/http/updateTodo.handler
+    events:
+      - http:
+          method: patch
+          path: todos/{todoId}
+          cors: true
+          authorizer: RS256Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Update a todo
+            description: Update a todo
+            requestModels:
+              "application/json": UpdateTodoRequest
 
-  # TODO: Configure this function
-  # GenerateUploadUrl:
-  #   handler: src/lambda/http/generateUploadUrl.handler
-  #   events:
-  #     - http:
-  #         method: post
-  #         path: todos/{todoId}/attachment
+  GenerateUploadUrl:
+    handler: src/lambda/http/generateUploadUrl.handler
+    events:
+      - http:
+          method: post
+          path: todos/{todoId}/attachment
+          cors: true
+          authorizer: RS256Auth
 
 resources:
   Resources:
@@ -118,7 +141,7 @@ resources:
         ResponseParameters:
           gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
           gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,PATCH,POST,PUT'"
         ResponseType: DEFAULT_4XX
         RestApiId:
           Ref: ApiGatewayRestApi

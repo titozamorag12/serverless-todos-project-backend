@@ -16,6 +16,7 @@ app.get("/todos", async (_req, res) => {
   res.json({
     items: todos,
   });
+  res.status(200).send();
 });
 
 const server = awsServerlessExpress.createServer(app);
