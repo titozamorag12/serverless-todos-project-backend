@@ -3,8 +3,11 @@ service:
 
 plugins:
   - serverless-webpack
-  - serverless-reqvalidator-plugin
   - serverless-iam-roles-per-function
+  - serverless-reqvalidator-plugin
+  - serverless-aws-documentation
+  - serverless-dynamodb-local
+  - serverless-offline
 
 provider:
   name: aws
@@ -15,46 +18,13 @@ provider:
 
   environment:
     TODOS_TABLE: Todos-${self:provider.stage}
+    TODOS_TABLE_INDEX: TodosIndex
     IMAGES_TABLE: Images-${self:provider.stage}
     IMAGE_ID_INDEX: ImageIdIndex
     IMAGES_S3_BUCKET: serverless-todos-attachments-images-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 3000
     AUTH_0_SECRET_ID: Auth0Secret-${self:provider.stage}
     AUTH_0_SECRET_FIELD: auth0Secret
-
-  iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - dynamodb:Scan
-        - dynamodb:PutItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-        - dynamodb:GetItem
-      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
-    - Effect: Allow
-      Action:
-        - dynamodb:PutItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-        - dynamodb:Query
-      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}
-    - Effect: Allow
-      Action:
-        - dynamodb:Query
-      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}/index/${self:provider.environment.IMAGE_ID_INDEX}
-    - Effect: Allow
-      Action:
-        - s3:PutObject
-        - s3:GetObject
-      Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*
-    - Effect: Allow
-      Action:
-        - secretsmanager:GetSecretValue
-      Resource: !Ref Auth0Secret
-    - Effect: Allow
-      Action:
-        - kms:Decrypt
-      Resource: !GetAtt KMSKey.Arn
 
 custom:
   topicName: imagesTopic-${self:provider.stage}
@@ -78,6 +48,15 @@ functions:
 
   GetTodos:
     handler: src/lambda/http/getTodos.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_TABLE_INDEX}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
     events:
       - http:
           method: get
@@ -87,13 +66,17 @@ functions:
 
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
     events:
       - http:
           method: post
           path: todos
           cors: true
           authorizer: RS256Auth
-          reqValidatorName: RequestBodyValidator
           documentation:
             summary: Create a new todo
             description: Create a new todo
@@ -102,6 +85,16 @@ functions:
 
   DeleteTodo:
     handler: src/lambda/http/deleteTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_TABLE_INDEX}
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:DeleteItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
     events:
       - http:
           method: delete
@@ -111,13 +104,22 @@ functions:
 
   UpdateTodo:
     handler: src/lambda/http/updateTodo.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_TABLE_INDEX}
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
     events:
       - http:
           method: patch
           path: todos/{todoId}
           cors: true
           authorizer: RS256Auth
-          reqValidatorName: RequestBodyValidator
           documentation:
             summary: Update a todo
             description: Update a todo
@@ -126,6 +128,26 @@ functions:
 
   GenerateUploadUrl:
     handler: src/lambda/http/generateUploadUrl.handler
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}/index/${self:provider.environment.TODOS_TABLE_INDEX}
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.IMAGES_TABLE}
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+        Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*
     events:
       - http:
           method: post
@@ -149,14 +171,23 @@ resources:
     TodosDynamoDBTable:
       Type: AWS::DynamoDB::Table
       Properties:
+        TableName: ${self:provider.environment.TODOS_TABLE}
         AttributeDefinitions:
           - AttributeName: todoId
+            AttributeType: S
+          - AttributeName: userId
             AttributeType: S
         KeySchema:
           - AttributeName: todoId
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
-        TableName: ${self:provider.environment.TODOS_TABLE}
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.TODOS_TABLE_INDEX}
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
 
     ImagesDynamoDBTable:
       Type: "AWS::DynamoDB::Table"
@@ -184,15 +215,6 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
-
-    RequestBodyValidator:
-      Type: AWS::ApiGateway::RequestValidator
-      Properties:
-        Name: "request-body-validator"
-        RestApiId:
-          Ref: ApiGatewayRestApi
-        ValidateRequestBody: true
-        ValidateRequestParameters: false
 
     AttachmentsBucket:
       Type: AWS::S3::Bucket

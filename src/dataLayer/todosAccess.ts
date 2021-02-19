@@ -17,22 +17,27 @@ export class TodoItemAccess {
   constructor(
     private readonly docClient: DocumentClient = createDynamoDBClient(),
     private readonly todoItemsTable = process.env.TODOS_TABLE,
+    private readonly todoItemsTableIndex = process.env.TODOS_TABLE_INDEX,
     private readonly imagesTable = process.env.IMAGES_TABLE,
     private readonly bucketName = process.env.IMAGES_S3_BUCKET,
     private readonly urlExpiration = process.env.SIGNED_URL_EXPIRATION
   ) {}
 
-  async getAllTodoItems(): Promise<TodoItem[]> {
+  async getAllTodoItems(userId: string): Promise<TodoItem[]> {
     logger.info("Getting all TodoItems");
 
     const result = await this.docClient
-      .scan({
+      .query({
         TableName: this.todoItemsTable,
+        IndexName: this.todoItemsTableIndex,
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
       })
       .promise();
 
-    const items = result.Items;
-    return items as TodoItem[];
+    return result.Items as TodoItem[];
   }
 
   async todoExists(todoId: String) {
