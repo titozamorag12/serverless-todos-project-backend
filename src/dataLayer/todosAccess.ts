@@ -1,12 +1,14 @@
 import * as AWS from "aws-sdk";
 import * as AWSXRay from "aws-xray-sdk";
-import { DocumentClient } from "aws-sdk/clients/dynamodb";
-
-const XAWS = AWSXRay.captureAWS(AWS);
 
 import { TodoItem } from "../models/TodoItem";
 import { TodoUpdate } from "../models/TodoUpdate";
 
+import { DocumentClient } from "aws-sdk/clients/dynamodb";
+import { createLogger } from "../utils/logger";
+
+const XAWS = AWSXRay.captureAWS(AWS);
+const logger = createLogger("todosAccess");
 const s3 = new XAWS.S3({
   signatureVersion: "v4",
 });
@@ -21,7 +23,7 @@ export class TodoItemAccess {
   ) {}
 
   async getAllTodoItems(): Promise<TodoItem[]> {
-    console.log("Getting all TodoItems");
+    logger.info("Getting all TodoItems");
 
     const result = await this.docClient
       .scan({
@@ -43,8 +45,10 @@ export class TodoItemAccess {
       })
       .promise();
 
-    console.log("Get todo: ", result);
-    return !!result.Item;
+    const exists = !!result.Item;
+    logger.info("Check if todo exists", { result: exists });
+
+    return exists;
   }
 
   async createImage(todoId: String, imageId: String) {
@@ -56,8 +60,7 @@ export class TodoItemAccess {
       imageId,
       imageUrl: `https://${this.bucketName}.s3.amazonaws.com/${imageId}`,
     };
-    console.log("Storing new item: ", newItem);
-
+    logger.info("Storing new item", { newItem: newItem });
     await this.docClient
       .put({
         TableName: this.imagesTable,
@@ -71,11 +74,15 @@ export class TodoItemAccess {
   }
 
   getUploadUrl(imageId: String) {
-    return s3.getSignedUrl("putObject", {
+    const signedUrl = s3.getSignedUrl("putObject", {
       Bucket: this.bucketName,
       Key: imageId,
       Expires: Number(this.urlExpiration),
     });
+
+    logger.info("Getting upload (S3) URL", { signedUrl: signedUrl });
+
+    return signedUrl;
   }
 
   async createTodoItem(todoItem: TodoItem): Promise<TodoItem> {
@@ -86,10 +93,15 @@ export class TodoItemAccess {
       })
       .promise();
 
+    logger.info("Creating todo item", { todoItem: todoItem });
     return todoItem;
   }
 
   async updateTodoItemAttachment(todoId: String, attachmentUrl: String) {
+    logger.info("Update todo attachamentUrl", {
+      todoId: todoId,
+      attachment: attachmentUrl,
+    });
     await this.docClient
       .update({
         TableName: this.todoItemsTable,
@@ -105,6 +117,7 @@ export class TodoItemAccess {
   }
 
   async updateTodoItem(todoId: string, todoUpdate: TodoUpdate) {
+    logger.info("Updating todo item: ", { todoUpdate: todoUpdate });
     await this.docClient
       .update({
         TableName: this.todoItemsTable,
@@ -127,6 +140,7 @@ export class TodoItemAccess {
   }
 
   async deleteTodoItem(todoId: String) {
+    logger.info("Deleting todo item", { todoId: todoId });
     await this.docClient
       .delete({
         TableName: this.todoItemsTable,
@@ -140,7 +154,7 @@ export class TodoItemAccess {
 
 function createDynamoDBClient() {
   if (process.env.IS_OFFLINE) {
-    console.log("Creating a local DynamoDB instance");
+    logger.info("Creating a local DynamoDB instance");
     return new XAWS.DynamoDB.DocumentClient({
       region: "localhost",
       endpoint: "http://localhost:8000",

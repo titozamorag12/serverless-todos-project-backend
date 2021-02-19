@@ -13,15 +13,14 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 app.patch("/todos/:todoId", async (_req, res) => {
-  console.log("newTodoItem: ", _req.body);
   const authorization = _req.headers.authorization;
   const split = authorization.split(" ");
   const jwtToken = split[1];
   const todoId = _req.params.todoId;
-  const newTodoItem: UpdateTodoRequest = _req.body;
-  console.log("auth: ", jwtToken);
-  console.log("todoId: ", todoId);
-  await updateTodoItem(todoId, newTodoItem, jwtToken);
+
+  const updatedItem: UpdateTodoRequest = _req.body;
+  await updateTodoItem(todoId, updatedItem, jwtToken);
+
   res.header("Access-Control-Allow-Origin", "*");
   res.header(
     "Access-Control-Allow-Headers",

@@ -13,13 +13,13 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 app.post("/todos", async (_req, res) => {
-  console.log("newTodoItem: ", _req.body);
   const authorization = _req.headers.authorization;
   const split = authorization.split(" ");
   const jwtToken = split[1];
+
   const newTodoItem: CreateTodoRequest = _req.body;
-  console.log("auth: ", jwtToken);
   const item = await createTodoItem(newTodoItem, jwtToken);
+
   res.header("Access-Control-Allow-Origin", "*");
   res.header(
     "Access-Control-Allow-Headers",

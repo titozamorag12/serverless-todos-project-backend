@@ -3,6 +3,7 @@ import "source-map-support/register";
 
 import { verify } from "jsonwebtoken";
 import { JwtPayload } from "../../auth/JwtPayload";
+import { createLogger } from "../../utils/logger";
 
 const cert = `-----BEGIN CERTIFICATE-----
 MIIDCzCCAfOgAwIBAgIJecDGy+QwHVKEMA0GCSqGSIb3DQEBCwUAMCMxITAfBgNV
@@ -24,12 +25,14 @@ UaCI80UafK3Rk3QGEJnYFdBqzyzLOyQVb2t9TMH9wc2KiwiBglTz0jmRIPnGbpaw
 jRKWBmZCyEpusnVm1HTd
 -----END CERTIFICATE-----`;
 
+const logger = createLogger("todosAccess");
+
 export const handler = async (
   event: CustomAuthorizerEvent
 ): Promise<CustomAuthorizerResult> => {
   try {
     const jwtPayload = verifyToken(event.authorizationToken);
-    console.log("User was authorized", jwtPayload);
+    logger.info("User was authorized", jwtPayload);
 
     return {
       principalId: jwtPayload.sub,
@@ -45,7 +48,7 @@ export const handler = async (
       },
     };
   } catch (e) {
-    console.log("User authorized", e.message);
+    logger.info("User authorized", e.message);
 
     return {
       principalId: "user",
